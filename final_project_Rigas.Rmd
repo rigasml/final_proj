@@ -1,0 +1,262 @@
+---
+title: Assessing Success and Patient Experience in Assisted Reproductive Technology
+author: Marc Rigas
+output: html_document
+---
+
+
+### Overview
+
+
+I have recently changed my final project in response to a discussion at a conference.  The reason for the switch is the availability of a public data set that will allow for a new application of some of the data science techniques learned in this class.  The new project is about assisted reproductive technologies.  I spoke to about this project with Amy Branum, Chief of the Reproductive Statistics Branch at the National Center for Health Statistics, and a epidemiologist/nutritionist.  I also spoke with a medical consumer behavior specialist at Kaiser Permanente, Dr. Sean Koons. Thirdly, I spoke with an MBA, process improvement specialist and founder of FertilityIQ, Jake Anderson.  What I learned is that assisted reproductive technology is a complicated clinical service, because it is typically not paid by insurance; it involves a great deal of patient compliance and collaboration and is a highly emotional process for patients; thirdly, there is a lot of variability in success and perception for different clinics offering this service. The patient population is often highly educated and very invested in their own care. There is Federal data available that might show some interesting differences between clinics, but this data has not been well tapped.
+
+Github Repository:
+https://github.com/rigasml/final_proj
+
+### Introduction 
+
+
+Assisted reproductive technology (ART), often referred to as fertility treatments, describes techniques and processes used to achieve pregnancy under circumstances when unassisted pregnancy is either not possible or not advised. The U.S. Centers for Disease Control and Prevention (CDC) limits the definition of ART to include all procedures in which both eggs and sperm are handled. Under this definition, the most common (and most costly) are forms of in vitro fertilization.  Generally, this involves surgical removal of eggs, combining them with sperm in a laboratory, and then returning either to the original woman or to a surrogate who can carry the pregnancy. According to data from the Society for Assisted Reproductive Technologies (SART), more than 174,000 procedures were performed in 2013 (SART data from online web query tool: http:// ), a 55% increase over ten years.  The primary factor that is often credited with the increase in the use of ART services is the increasing age of parents. More women are waiting until they are beyond 35 years of age before trying to conceive, and fertilty declines with age. ART is very expensive, with in vitro fertilization cycles costing between $10,000 and $30,000.  Some women require multiple cycles, and the costs are most often not covered by insurance.  
+
+In addition, there is, at least reported differences in success rates at different clinics.  This leads some couples to be willing to travel across the country or across the world to get procedures done by a particular clinic. This is a very emotional process for women who engage in it, and women have been willing to provide a great deal of information on their experiences at the clinics and to disclose their personal medical information if it might help other patients in the future.  The start up company, FertilityIQ has collected detailed survey information from more than 1,000 women who have undergone some type of ART procedure.  
+
+There is publicly available data on the ART clinics, this data is voluntarily submitted to the CDC as part of their annual survey on assisted reproductive technologies.  Since the market is growing and this is becoming a more common elective procedure, with high emotional and financial costs for the couples who are using these services, it would be interesting to see what types of information on factors affecting success can be gleaned from the publicly available CDC data.
+
+This is a multidisciplinary problem.  It involves consumer behavior and sociology, endocrinology an reproductive medicine, and there is an aspect of process improvement (decision science and industrial engineering) for the clinics involved.  It is expexted that down the road, analysis of this data can help women make smart decisions about their treatment and can help clinics improve their operations and have more unbiased information about patient behavior that might contribute to positive outcomes for the clinics and the patients. 
+
+
+### Methods
+
+I am using the CDC 2013 Fertility Clinic Success Rate Data (http://www.cdc.gov/art/index.html) This dataset includes 213 variables collected from 468 reporting clinics in the United States.  We will use Principal Components Analysis and use a general linear regression to explore which variables consistently have the largest impact on successful outcomes. The metric for a successful outcome in this analysis is "pregnancies per 100 transfers". If it is possible to define a variable or set of variables on which success depends, then this will provide information for people using the CDC data set to choose clinics. 
+
+A second goal for this project will be to use publicly available social media data to try to get an initial impression of patient satisfaction with fertility clinics and IVF.  I have searched the public two week Twitter feed on the words "fertility clinic" and "IVF". I will present these early results in a qualitative manner using a word cloud. 
+
+To explore the first question about what knowledge one can gather from the CDC data about factors affecting differences in outcome success at fertility clinics, I first imported and cleaned the CDC dataset by removing % signs in relevant variables.  In the pregnancy success rates, a true success rate was only reported when 20 or more total cycles that correspond to that type of ivf (e.g. fresh, non-donor, fresh frozen, etc.) had been conducted. When fewer than 20 cycles were reported, the data table contained a fraction as text (e.g., '13 / 15') rather than an integer as was reported in most cases.  One could try to identify these suspect values and compute the quotient to generate a success rate.  However, since the number of procedures is small, the CDC data collectors were concerned that the success rate would not be as meaningful and may confound the data.  I chose to replace these fractions with "NA" in the data set.  Unfortunately, in some categories, this left up to 200 NAs out of the 468 clinics reporting. 
+Summary statistics were then calculated for a number of outcome (success) and disease diagnosis variables.
+
+A principal components analysis on the disease diagnosis variables was used to explore the greatest components of variability in disease diagnoses between the clinics.  
+
+A linear regression was used to evaluate the effect of these 5 disease diagnoses on pregancy rates at the clinics.  I only used these 5 diagnosis codes to avoid overfitting the model.  A separate regression was completed for pregnancy rates at each of the following age groups: 35-37, 38-40, 41-42, 42 - 44. 
+
+
+```{r eval=TRUE}
+library(RCurl)
+library(dplyr)
+my.url <- getURL("https://raw.githubusercontent.com/rigasml/final_proj/master/NCHS_art2013.csv")
+art2013.data <- read.csv(text = my.url, header=TRUE, sep=",",as.is=TRUE)
+
+#count clinics by state
+str(art2013.data)
+StateCount <- art2013.data %>%
+  group_by(ClinStateCode) %>%
+  summarise(n=n()) 
+arrange(StateCount, desc(n))  
+##California #1 with 6, then Texas.  PA #7 with 19.
+
+##Statistics on clinics using gestational carrier (i.e. surrogate)
+summary(art2013.data$Gest_Rate)
+
+#Clean data - get rid of percent sign in number of variables of interest
+art2013.data$Diag_ComboNoMaleRate <- as.numeric(sub("%", "", art2013.data$Diag_ComboNoMaleRate))
+art2013.data$IVF_Rate <- as.numeric(sub("%", "", art2013.data$IVF_Rate))
+art2013.data$Gest_Rate <- as.numeric(sub("%", "", art2013.data$Gest_Rate))
+art2013.data$Diag_TubalRate <- as.numeric(sub("%", "", art2013.data$Diag_TubalRate))
+art2013.data$Diag_OvulatoryRate <- as.numeric(sub("%", "", art2013.data$Diag_OvulatoryRate))
+art2013.data$Diag_DORRate <- as.numeric(sub("%", "", art2013.data$Diag_DORRate))
+art2013.data$Diag_EndometriosisRate <- as.numeric(sub("%", "", art2013.data$Diag_EndometriosisRate))
+art2013.data$Diag_UterineRate <- as.numeric(sub("%", "", art2013.data$Diag_UterineRate))
+
+
+
+
+#In previous steps, values labeled "<1%" get set to NA by coercion.  Set these values to zero
+
+art2013.data$Diag_ComboNoMaleRate[is.na(art2013.data$Diag_ComboNoMaleRate)] <- 0 
+art2013.data$IVF_Rate[is.na(art2013.data$IVF_Rate)] <- 0
+art2013.data$Gest_Rate[is.na(art2013.data$Gest_Rate)] <- 0
+art2013.data$Diag_TubalRate[is.na(art2013.data$Diag_TubalRate)] <- 0 
+art2013.data$Diag_OvulatoryRate[is.na(art2013.data$Diag_OvulatoryRate)] <- 0 
+art2013.data$Diag_DORRate[is.na(art2013.data$Diag_DORRate)] <- 0 
+art2013.data$Diag_EndometriosisRate[is.na(art2013.data$Diag_EndometriosisRate)] <- 0 
+art2013.data$Diag_UterineRate[is.na(art2013.data$Diag_UterineRate)] <- 0 
+
+
+
+#Get these out of text form into numeric
+art2013.data$FshNDEmbryosRate1 <- as.numeric(art2013.data$FshNDEmbryosRate1)
+art2013.data$FshNDEmbryosRate2 <- as.numeric(art2013.data$FshNDEmbryosRate2)
+art2013.data$FshNDEmbryosRate3 <- as.numeric(art2013.data$FshNDEmbryosRate3)
+art2013.data$FshNDEmbryosRate4 <- as.numeric(art2013.data$FshNDEmbryosRate4)
+art2013.data$FshNDEmbryosRate5 <- as.numeric(art2013.data$FshNDEmbryosRate5)
+art2013.data$FshNDPregRate1
+art2013.data$FshNDPregRate1 <- as.numeric(art2013.data$FshNDPregRate1)
+art2013.data$FshNDPregRate2 <- as.numeric(art2013.data$FshNDPregRate2)
+art2013.data$FshNDPregRate3 <- as.numeric(art2013.data$FshNDPregRate3)
+art2013.data$FshNDPregRate4 <- as.numeric(art2013.data$FshNDPregRate4)
+art2013.data$FshNDPregRate5 <- as.numeric(art2013.data$FshNDPregRate5)
+#Perform PCA on female disease diagnoses
+art.pca <- prcomp(art2013.data[,11:15])
+
+glm.diag <- glm(art2013.data$FshNDPregRate4 ~ art2013.data$Diag_TubalRate+art2013.data$Diag_DORRate+art2013.data$Diag_UterineRate+art2013.data$Diag_OvulatoryRate+art2013.data$Diag_EndometriosisRate)
+cor(art2013.data$FshNDPregRate3, art2013.data$Diag_DORRate, use="complete.obs")
+
+```
+
+To examine patient perceptions of their experience with infertility or with fertility clinics, I searched Twitter data for the words, "fertility", "ivf", and "ivf clinic". The frequency of terms in the returned tweets was depicted by creating a series of word clouds. I set the limits so that the minimum frequency was that the term had to be present in 1% of the Tweets in order to be depicted in the Word cloud. 
+
+```
+
+```{r eval=TRUE}
+#consumer_key <- OMMITTED FROM PUBLIC FILE
+#consumer_secret <- 
+#access_token <- 
+#access_secret <- 
+library(twitteR)
+setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
+library("wordcloud")
+library("tm")
+library("SnowballC")
+library("RColorBrewer")
+```
+
+
+
+
+### Results
+
+
+Pregnancy rate across the board for women in ART clinics is below 40% and is variable from clinic to clinic. As an example, for Women ages 35 - 37, the pregnancy rate from fresh, non-donor eggs is summarized across all 468 clinics as follows:
+
+```{r eval=TRUE}
+summary(art2013.data$FshNDPregRate2)
+```
+It is staggering that families are willing to commit to rounds of ivf given the success rate of less than 50% and a cost of more that $10,000 per cycle.  One can imagine very few medical procedures or consumer products, for that matter, where this cost and success rate would be considered acceptable.  This is a further indication of the level of commitment and interest by the patient population. 
+
+
+```{r eval=TRUE}
+summary(art2013.data$IVF_Rate)
+summary(art2013.data$Gest_Rate)
+```
+A summary of the variables for IVF and for surrogacy indicates that almost all clinics do IVF in nearly 100% of the cases they report to CDC.  However, surrogate parents are used 1% of the time or less. One clinic reported a 25% surrogacy (Gestational Carrier) rate. This clinic is in the Bay Area north of San Francisco and seems to get positive consumer reviews on the Internet. A point that was raised following the oral presentation is an interesting one. It is possible that this clinic serves a significant number of male same sex couples, leading to the high rate of surrogacy.
+
+
+Results from the Principal Components Analysis, the greatest variability in disease between clinics is in tubal factor infertility (PC1) and in ovulatory dysfunction (PC2).  These are relatively rare causes of infertility and ar variable between clinics. Together these account for more than 65% of the variability in diagnoses between clinics. 
+
+```{r eval=TRUE}
+summary(art.pca)
+barplot((sapply(art2013.data[,11:15], mean)),names.arg= c("Tubal","Ovulatory","DOR","Endomtr","Uterine"), ylim=c(0,50),ylab="Rate(%)", main="Mean diagnosis rates")
+```
+
+The plot of mean diagnosis rates across clinics indicates that these are two moderately common disease diagnoses (the most common is Diminished Ovarian Reserve (DOR), with a mean diagnosis rate of more than 30%).
+
+The linear regression indicates that was run for each age group.  The only age group where any disease factor was significant was the 35-37 year old age group, so only that result is presented. 
+
+```{r eval=TRUE}
+summary(glm.diag)
+summary(art2013.data$FshNDPregRate3)
+summary(art2013.data$FshNDPregRate2)        
+
+```
+
+The only variable that was significant was diminished ovarian reserve (DOR). This means there are fewer eggs present in the ovary.  It is negatively correlated with Fresh non-donor pregnancy rate.  This is not surprising, as it is more likely that in the cases of DOR, success would be lower, but it also seems likely that fewer women would be using fresh non-donor eggs under these conditions.  
+
+Despite statistical significance, the magnitude of the coefficient is small. There is no visible correlation between DOR Rate and pregnancy success rates.
+
+```{r eval = TRUE}
+preg.rate3537 <- art2013.data$FshNDPregRate2
+diag.DOR <- art2013.data$Diag_DORRate
+plot(preg.rate3537,diag.DOR)
+
+
+```
+
+#Word cloud of Tweets for 'fertility'
+```{r eval=TRUE}
+tweets <- searchTwitter('fertility', n=2000)
+tweet_text <- sapply(tweets, function(x) x$getText()) #convert list entries to text
+tweet_text_corpus <- Corpus(VectorSource(tweet_text)) #create corpus
+#Change encoding of text to avoid errors
+tweet_text_corpus <- tm_map(tweet_text_corpus,
+                              content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte'))
+)
+
+#clean up - all lower case, remove urls, no punctuation, remove stopwords
+#can use inspect(tweet_text_corpus) along the way to look at contents
+
+
+tweet_text_corpus <- tm_map(tweet_text_corpus, content_transformer(tolower))
+tweet_text_corpus <- tm_map(tweet_text_corpus, removePunctuation)
+tweet_text_corpus <- tm_map(tweet_text_corpus, removeNumbers)
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x)
+tweet_text_corpus <- tm_map(tweet_text_corpus, content_transformer(removeURL))
+myStopwords <- c(stopwords(), "via")
+tweet_text_corpus <- tm_map(tweet_text_corpus, function(x) removeWords(x, myStopwords))
+
+wc.fertility <- wordcloud(tweet_text_corpus, min.freq=20, max.words=60, random.order=T, colors=brewer.pal(8, "Dark2"))
+```
+
+#Wordcloud for 'ivf'
+```{r eval=TRUE}
+tweets <- searchTwitter('ivf', n=2000)
+tweet_text <- sapply(tweets, function(x) x$getText()) #convert list entries to text
+tweet_text_corpus <- Corpus(VectorSource(tweet_text)) #create corpus
+#Change encoding of text to avoid errors
+tweet_text_corpus <- tm_map(tweet_text_corpus,
+                              content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte'))
+)
+#clean up - all lower case, remove urls, no punctuation, remove stopwords
+#can use inspect(tweet_text_corpus) along the way to look at contents
+tweet_text_corpus <- tm_map(tweet_text_corpus, content_transformer(tolower))
+tweet_text_corpus <- tm_map(tweet_text_corpus, removePunctuation)
+tweet_text_corpus <- tm_map(tweet_text_corpus, removeNumbers)
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x)
+tweet_text_corpus <- tm_map(tweet_text_corpus, content_transformer(removeURL))
+myStopwords <- c(stopwords(), "via")
+tweet_text_corpus <- tm_map(tweet_text_corpus, function(x) removeWords(x, myStopwords))
+
+wc.ivf <- wordcloud(tweet_text_corpus, min.freq=10, max.words=60, random.order=T, colors=brewer.pal(8, "Dark2"))
+```
+
+#Wordcloud for 'ivf clinic'
+```{r eval=TRUE}
+tweets <- searchTwitter('ivf clinic', n=2000)
+tweet_text <- sapply(tweets, function(x) x$getText()) #convert list entries to text
+tweet_text_corpus <- Corpus(VectorSource(tweet_text)) #create corpus
+#Change encoding of text to avoid errors
+tweet_text_corpus <- tm_map(tweet_text_corpus,
+                              content_transformer(function(x) iconv(x, to='UTF-8-MAC', sub='byte'))
+)
+#clean up - all lower case, remove urls, no punctuation, remove stopwords
+#can use inspect(tweet_text_corpus) along the way to look at contents
+tweet_text_corpus <- tm_map(tweet_text_corpus, content_transformer(tolower))
+tweet_text_corpus <- tm_map(tweet_text_corpus, removePunctuation)
+tweet_text_corpus <- tm_map(tweet_text_corpus, removeNumbers)
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x)
+tweet_text_corpus <- tm_map(tweet_text_corpus, content_transformer(removeURL))
+myStopwords <- c(stopwords(), "via")
+tweet_text_corpus <- tm_map(tweet_text_corpus, function(x) removeWords(x, myStopwords))
+
+wordcloud(tweet_text_corpus, min.freq=2, max.words=60, random.order=T, colors=brewer.pal(8, "Dark2"))
+```
+
+As the Twitter search pulls the preceding two weeks of data, it appears to be extremely sensitive to timing of the search.  I ran one search for the oral presentation.  I just knitted this written presentation for final submission and the Twitter Word Cloud has changed substantially. This means Twitter is very good for detecting current and trending events.  The text below refers to the word clouds generated for the oral presentation.  That search returned high frequency results on china, probably due to news events at the time about ivf clinics in China at the end of the Chinese one child policy. In the current search on "ivf clinic", "India" was returned with a higher frequency. 
+
+The word clouds for "fertility", "ivf", and "fertility clinic" are presented. Another word cloud was attempted for "fertility clinic". However, this did not return enough Tweets to produce a reasonable word cloud, and this code/plot was not included in the methods or results. 
+
+The search for "fertility" returned some interesting words with reasonably high frequency - "odds", "may boost", and, to a lesser degree, "help". People are Tweeting about needing help with fertility and, perhaps, about increasing their odds.  
+
+The search on "ivf" returned the high frequency word "infertility", as well as "fertility". A A number of lower frequency words were returned.  One interesting return was "Poland". A quick Web search indicated that Poland has become known as having some of the best trained IVF specialists and lowest costs within Europe. 
+
+The "ivf clinic" search was very interesting. While it did not return "Poland", it did return "China", "Shanghai", and "Nanfang", which refers to China and a media outlet. China also appears to be a destination for medical tourism in fertility treatment. Also, and perhaps more relevant to this time period (the two weeks proceeding the search), there have been a number of recent media stories about how the end of China's one child policy will mean a number of people will be looking to the tightly-controlled fertility industry in China.  One well-known clinic is at the Nanfang Medical Center in Southern China. In addition, the search returned the word "struggles" with reasonably high frequency.
+
+The Twitter search returned some moderate support for the notion that people struggle with fertility, and more specifically, with their ivf clinic experience.  
+
+The original questions were how much can be assessed from publicly available data to help patients differentiate between fertility clinics and the conditions that may either be correlated with or lead to successful pregnancy.  IVF is a complicated process and people come to clinics for a variety of reasons, including medical conditions.  The process requires a high degree of patient involvement, decision making, and compliance.  The best clinics, no doubt, are trusted partners in this process. The reported CDC data makes it challenging for people to make simple comparisons, to the extent that simple comparisons can even be made.  There are data quality and availability issues, but it is quite likely that the task of comparing the complicated processes leading to success would be nearly impossible from any similar data set.   
+
+The Twitter data is highly sensitive to trending current events. The Twitter feed appears to be mildly to moderately suggestive that there is stress around this procedure, around infertility, around struggles with ivf, and perhaps even with low cost medical tourism for these treatments.
+
+Further meta analyses on the health conditions around infertility and their relationship to success in the clinical ivf procedures may be possible using proprietary data collected by the professional society, Society of Assisted Reproductive Technologies (SART). These datasets are available with permission of SART, but a research proposal must be submitted.  This leads to other questions of how open the organization is to data sharing if the research proposed would not be seen as acceptable by the Society. A start-up company, Fertility IQ has collected voluntary survey data from over 1,000 patients.  This survey data is quite detailed but is also proprietary.  It will be interesting to explore how this medical practice develops in the upcoming years as procedures likely continue to improve and more couples of all types are choosing to use these services. 
+
+
+
+
